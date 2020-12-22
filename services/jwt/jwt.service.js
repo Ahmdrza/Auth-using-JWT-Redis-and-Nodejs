@@ -12,7 +12,7 @@ exports.generateToken = () => {
 
         const client = redis.createClient();
         let msAfterTokenGenerated = new Date().getTime();
-        let timeElapsed = secondsAfterTokenGenerated - msBeforeTokenGenerated;
+        let timeElapsed = msAfterTokenGenerated - msBeforeTokenGenerated;
         timeElapsed = ((timeElapsed % 60000) / 1000).toFixed(0); //convert ms to sec
         let expTime = 60 * 60 * 24; // keep it same as token expire time
         expTime = expTime - timeElapsed;
