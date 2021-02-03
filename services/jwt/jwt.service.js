@@ -34,35 +34,40 @@ exports.generateToken = () => {
 }
 
 exports.verifyToken = (token) => {
-    jwt.verify(token, jwtConfig.secret)
-    redisClient.get(token, (err, result) => {
-        if (err) throw new Error('token not found')
-
-        const tokenData = JSON.parse(result)
-        let expiryTime = tokenData.expiryTime
-        var currentTime = Math.floor(new Date().getTime() / 1000)
-        const diff = expiryTime - currentTime
-        if (diff < 0) {
-            throw new Error('token expired')
-        }
-
-        if (diff < 3600) {
-            const newCurrentTime = Math.floor(new Date().getTime() / 1000)
-            expiryTime = newCurrentTime + 86400
-        }
-
-        const data = {
-            ...tokenData,
-            lastRefresh: Math.floor(new Date().getTime() / 1000),
-            expiryTime: expiryTime
-        }
-        
-        redisClient.set(token, JSON.stringify(data), 'EX', expiryTime, (err) => {
-            if (err) {
-                console.log('redis error', err)
-                throw new Error('REDIS ERROR')
+    return new Promise((resolve, reject) => {
+        jwt.verify(token, jwtConfig.secret)
+        redisClient.get(token, function(err, reply) {
+            if (err) reject({message: 'token not found'})
+            if (reply) {
+                const tokenData = JSON.parse(reply)
+                let expiryTime = tokenData.expiryTime
+                var currentTime = Math.floor(new Date().getTime() / 1000)
+                const diff = expiryTime - currentTime
+                if (diff < 0) {
+                    reject({message: 'token expired'})
+                }
+    
+                if (diff < 3600) {
+                    const newCurrentTime = Math.floor(new Date().getTime() / 1000)
+                    expiryTime = newCurrentTime + 86400
+                }
+    
+                const updatedData = {
+                    ...tokenData,
+                    lastRefresh: Math.floor(new Date().getTime() / 1000),
+                    expiryTime: expiryTime
+                }
+                
+                redisClient.set(token, JSON.stringify(updatedData), 'EX', expiryTime, (err) => {
+                    if (err) {
+                        console.log('redis error', err)
+                        reject({message: 'REDIS ERROR'})
+                    }
+                    resolve('success')
+                })
+            } else {
+                reject({message: 'token not found'})
             }
         })
     })
-    
 }
