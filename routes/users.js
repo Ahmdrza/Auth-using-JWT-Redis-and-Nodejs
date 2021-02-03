@@ -12,7 +12,7 @@ router.post('/signup', async (req, res, next) => {
   })
 });
 
-router.post('/me', auth , (req, res, next) => {
+router.post('/me', auth, (req, res, next) => {
   res.status(200).json({
     status: 'SUCCESS',
     data: 'some user info',

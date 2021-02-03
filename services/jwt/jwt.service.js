@@ -1,23 +1,29 @@
 var jwt = require('jsonwebtoken');
-const redis = require("redis");
 
 const { jwtConfig } = require('../../config/jwt.config');
+const { redisClient } = require('../../config/redis.config')
 
 exports.generateToken = () => {
     return new Promise((resolve, reject) => {
-        let msBeforeTokenGenerated = new Date().getTime();
-        var token = jwt.sign({ _uid: 1 }, jwtConfig.secret, {
-            expiresIn: '1d', // for more time options, check https://github.com/vercel/ms
-        });
+        const msBeforeTokenGenerated = new Date().getTime();
+        const token = jwt.sign({ _uid: 1 }, jwtConfig.secret);
 
-        const client = redis.createClient();
-        let msAfterTokenGenerated = new Date().getTime();
+        
+        const msAfterTokenGenerated = new Date().getTime();
         let timeElapsed = msAfterTokenGenerated - msBeforeTokenGenerated;
         timeElapsed = ((timeElapsed % 60000) / 1000).toFixed(0); //convert ms to sec
-        let expTime = 60 * 60 * 24; // keep it same as token expire time
+        let expTime = 60 * 60 * 24;
         expTime = expTime - timeElapsed;
 
-        client.set('_uid1', token, 'EX', expTime, (err, result) => {
+        const currentTime = Math.floor(new Date().getTime() / 1000)
+        const nextDay = currentTime + 86400
+    
+        const data = {
+            lastRefresh: currentTime,
+            expiryTime: nextDay
+        }
+
+        redisClient.set(token, JSON.stringify(data), 'EX', expTime, (err) => {
             if (err) {
                 console.log('redis error', err);
                 reject('REDIS ERROR');
@@ -29,4 +35,33 @@ exports.generateToken = () => {
 
 exports.verifyToken = (token) => {
     jwt.verify(token, jwtConfig.secret);
+    redisClient.get(token, (err, result) => {
+        if (err) throw new Error('token not found')
+
+        const tokenData = JSON.parse(result)
+        let expiryTime = tokenData.expiryTime
+        var currentTime = Math.floor(new Date().getTime() / 1000);
+        const diff = expiryTime - currentTime;
+        if (diff < 0) {
+            throw new Error('token expired')
+        }
+
+        if (diff < 3600) {
+            const newCurrentTime = Math.floor(new Date().getTime() / 1000)
+            expiryTime = newCurrentTime + 86400
+        }
+
+        const data = {
+            ...tokenData,
+            lastRefresh: Math.floor(new Date().getTime() / 1000),
+            expiryTime: expiryTime
+        }
+        
+        redisClient.set(token, JSON.stringify(data), 'EX', expiryTime, (err) => {
+            if (err) {
+                console.log('redis error', err);
+            }
+        });
+    })
+    
 };
